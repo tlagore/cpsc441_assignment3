@@ -1,5 +1,7 @@
 package cpsc441_assignment3;
 
+import java.io.IOException;
+import java.net.Socket;
 import java.util.Timer;
 
 /**
@@ -22,6 +24,7 @@ public class FastFtp {
 	private Timer _TimeoutTimer;
 	private int _RtoTimeout;
 	private TxQueue _PacketQueue;
+	private Socket _TCPSocket;
 	
 	public FastFtp(int windowSize, int rtoTimer) {
 		//
@@ -47,6 +50,9 @@ public class FastFtp {
 		//
 		// to be completed
 		//
+		while (!TcpHandshake(serverName, serverPort, fileName))
+		{
+		};
 	}
 	
 	public synchronized void processTimeout()
@@ -64,9 +70,16 @@ public class FastFtp {
 		
 	}
 	
-	public boolean TcpHandshake(int serverName, int serverPort, String fileName)
+	public boolean TcpHandshake(String serverName, int serverPort, String fileName)
 	{
 		boolean success = false;
+		
+		try{
+			_TCPSocket = new Socket(serverName, serverPort);
+		}catch(IOException ex)
+		{
+			
+		}
 		
 		return success;
 	}
