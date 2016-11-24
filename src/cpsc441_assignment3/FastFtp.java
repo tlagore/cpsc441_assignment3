@@ -1,8 +1,14 @@
 package cpsc441_assignment3;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.Timer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import cpsc441.a3.*;
 
 /**
  * FastFtp Class
@@ -25,6 +31,7 @@ public class FastFtp {
 	private int _RtoTimeout;
 	private TxQueue _PacketQueue;
 	private Socket _TCPSocket;
+	private Logger _Logger;
 	
 	public FastFtp(int windowSize, int rtoTimer) {
 		//
@@ -33,6 +40,7 @@ public class FastFtp {
 		this._TimeoutTimer = new Timer(true);
 		this._RtoTimeout = rtoTimer;
 		_PacketQueue = new TxQueue(windowSize);
+		_Logger = Logger.getLogger(this.getClass().getName());
 	}
 
     /**
@@ -50,9 +58,13 @@ public class FastFtp {
 		//
 		// to be completed
 		//
-		while (!TcpHandshake(serverName, serverPort, fileName))
+		if (TcpHandshake(serverName, serverPort, fileName))
 		{
-		};
+			
+		}else
+		{
+			_Logger.log(Level.SEVERE, "Failed to initialize TCP Handshake");
+		}
 	}
 	
 	public synchronized void processTimeout()
@@ -73,12 +85,28 @@ public class FastFtp {
 	public boolean TcpHandshake(String serverName, int serverPort, String fileName)
 	{
 		boolean success = false;
-		
+		byte retVal;
+		DataOutputStream outputStream;
+		DataInputStream inputStream;
 		try{
 			_TCPSocket = new Socket(serverName, serverPort);
+			outputStream = new DataOutputStream(_TCPSocket.getOutputStream());
+			inputStream = new DataInputStream(_TCPSocket.getInputStream());
+			
+			outputStream.writeUTF(fileName);
+			outputStream.flush();
+			
+			retVal = inputStream.readByte();
+			
+			success = retVal == 0;
+			
+			//outputStream.writeByte(0);
+			
+			outputStream.close();
+			inputStream.close();
 		}catch(IOException ex)
 		{
-			
+			_Logger.log(Level.SEVERE, "Error in TCP handshake.", ex);
 		}
 		
 		return success;
