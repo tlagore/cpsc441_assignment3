@@ -3,12 +3,14 @@ package cpsc441_assignment3;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.net.DatagramPacket;
 import java.net.Socket;
 import java.util.Timer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import cpsc441.a3.*;
+import cpsc441.a3.Segment;
+import cpsc441.a3.TxQueue;
 
 /**
  * FastFtp Class
@@ -58,9 +60,12 @@ public class FastFtp {
 		//
 		// to be completed
 		//
+		DatagramPacket packet;
+		
+		int maxSegmentSize = Segment.MAX_PAYLOAD_SIZE;
 		if (TcpHandshake(serverName, serverPort, fileName))
 		{
-			
+			System.out.println(_TCPSocket.getLocalPort());
 		}else
 		{
 			_Logger.log(Level.SEVERE, "Failed to initialize TCP Handshake");
