@@ -7,13 +7,10 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
-import java.net.InetAddress;
 import java.net.Socket;
 import java.util.Timer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -21,12 +18,18 @@ import cpsc441.a3.Segment;
 import cpsc441.a3.TxQueue;
 
 /**
+ * *PLEASE NOTE* - I have decided to use my one 24 hour extension on this project, hence why it is a day late!
+ * 
+ * I checked with Amir before submitting late and he agreed.
+ * 
+ * 
  * FastFtp Class
  * 
  * FastFtp implements a basic FTP application based on UDP data transmission.
  * The main mehtod is send() which takes a file name as input argument and send the file 
  * to the specified destination host.
  * 
+ * @author Tyrone
  */
 public class FastFtp {
 	
@@ -47,10 +50,7 @@ public class FastFtp {
 	private ExecutorService _ExecutorService;
 	
 	public FastFtp(int windowSize, int rtoTimer) {
-		//
-		// to be completed
-		//
-		//this._TimeoutTimer = new Timer(true);
+
 		this._RtoTimeout = rtoTimer;
 		_PacketQueue = new TxQueue(windowSize);
 		_Logger = Logger.getLogger(this.getClass().getName());
@@ -76,32 +76,31 @@ public class FastFtp {
 		File file = new File(fileName);
 		Segment segmentToSend;
 		
+		//initialize TCP connection
 		if (TcpHandshake(serverName, serverPort, fileName))
 		{
 			try{
+				//create UDP socket
 				_UDPSocket = new DatagramSocket(_TCPSocket.getLocalPort());			
-				FileInputStream fileIn;
-				
-				//ReceiverThread receiver = new ReceiverThread(_UDPSocket, this);
-				//receiver.start();
 				ReceiverThread receiver = new ReceiverThread(_UDPSocket, this);
 				_ExecutorService.execute(receiver);
-				//Future receiver = _ExecutorService.submit(new ReceiverThread(_UDPSocket, this));
-				//ReceiverThread receiver = new ReceiverThread(_UDPSocket, this);
-				//receiver.start();
 
-				fileIn = new FileInputStream(file);
-				//InetAddress IPAddress = InetAddress.getByName(serverName);
-				
-				while((amountRead = fileIn.read(fileInput)) != -1)
+				DataInputStream inStream = new DataInputStream(new FileInputStream(file));
+	
+				//while theres more to read
+				while((amountRead = inStream.read(fileInput)) != -1)
 				{
+					//if we didn't read a full MAX_PAYLOAD_SIZE in bytes, adjust the size of the buffer accordingly
 					if(amountRead < Segment.MAX_PAYLOAD_SIZE)
 					{
 						extraBuffer = new byte[amountRead];
 						System.arraycopy(fileInput, 0, extraBuffer, 0, amountRead);	
 						segmentToSend = new Segment(_NextSegmentNumber++, extraBuffer);
 					}else
+					{
+						//otherwise just create a segment
 						segmentToSend = new Segment(_NextSegmentNumber++, fileInput);
+					}
 					
 					while(_PacketQueue.isFull())
 						Thread.yield();
@@ -109,24 +108,19 @@ public class FastFtp {
 					processSend(segmentToSend);
 				}
 				
+				//wait for packets to send
 				while(!_PacketQueue.isEmpty())
 					Thread.yield();
 				
-				//stop receiver
-				//_ExecutorService.awa
-				//receiver.interrupt();
 				
+				//clean up
 				receiver.shutdown();
 				_ExecutorService.shutdown();
 				System.out.println("Sent cancel signal to receiver.");
-				//_ExecutorService.awaitTermination(5, TimeUnit.SECONDS);
-				//receiver.interrupt();
 				
-				fileIn.close();
-				//_TCPSocket.getOutputStream().close();
-				//_TCPSocket.getInputStream().close();
-				//_TCPSocket.close();
+				inStream.close();
 				
+				//As we are on localhost, server shuts down the sockets otherwise I'd close sockets here
 				endTransmission();
 				System.out.println("Sent server shutdown signal. Server will close sockets.");
 		
@@ -140,6 +134,9 @@ public class FastFtp {
 		}
 	}
 	
+	/**
+	 * ends the transmission by writing a 0 to the TCP connection to inform the server we are done
+	 */
 	private void endTransmission()
 	{
 		DataOutputStream outputStream;
@@ -153,9 +150,14 @@ public class FastFtp {
 		}
 	}
 	
+	/**
+	 * Handles the sending of a segment over the initialized UDP connection
+	 * 
+	 * @param seg The segment needing to be sent
+	 */
 	public synchronized void processSend(Segment seg)
 	{
-		DatagramPacket packet = new DatagramPacket(seg.getBytes(), seg.getLength(), _TCPSocket.getInetAddress(), _TCPSocket.getPort());
+		DatagramPacket packet = new DatagramPacket(seg.getBytes(), seg.getBytes().length, _TCPSocket.getInetAddress(), _TCPSocket.getPort());
 		try{
 			_UDPSocket.send(packet);
 			_PacketQueue.add(seg);
@@ -169,6 +171,9 @@ public class FastFtp {
 		}
 	}
 	
+	/**
+	 * handles a timeout. In the case of a timeout, all packets in the current queue are resent
+	 */
 	public synchronized void processTimeout()
 	{
 		System.out.println("Timeout");
@@ -178,7 +183,7 @@ public class FastFtp {
 		for(int i = 0; i < segmentsInQueue.length; i ++)
 		{
 			seg = segmentsInQueue[i];
-			packet = new DatagramPacket(seg.getBytes(), seg.getLength(), _TCPSocket.getInetAddress(), _TCPSocket.getPort());
+			packet = new DatagramPacket(seg.getBytes(), seg.getBytes().length, _TCPSocket.getInetAddress(), _TCPSocket.getPort());
 			try{
 				_UDPSocket.send(packet);
 			}catch(Exception ex)
@@ -191,40 +196,57 @@ public class FastFtp {
 			startTimer();
 	}
 	
+	/**
+	 * starts the timer. Occurs at startup and when the timer times out and the queue is not empty
+	 */
 	private synchronized void startTimer()
 	{
 		if(_TimeoutTimer != null)
-			_TimeoutTimer.cancel();
+		{
+			try{
+				_TimeoutTimer.cancel();
+			}catch(Exception ex){} //in case timer has already been cancelled
+			
+		}
 		
 		_TimeoutTimer = new Timer(true);
 		_TimeoutTimer.schedule(new TimeoutHandler(this), _RtoTimeout);
 	}
 	
 	/**
-	 * 
-	 * @param ack
+	 * processACK removes all packets up to the ack in question from the queue as the server has acknowledged their arrival
+	 * @param ack The Segment that was received from the server
 	 */
 	public synchronized void processACK(Segment ack)
 	{
 		//window has to be less than or equal to my index + windowSize, so if ack seq is greater than 
 		//or equal to current front of queue, it's in window
-		if(ack.getSeqNum() >= _PacketQueue.element().getSeqNum())
+		if(ack.getSeqNum() >= _PacketQueue.element().getSeqNum() && ack.getSeqNum() <= _NextSegmentNumber)
 		{
+			_TimeoutTimer.cancel();
 			System.out.println("Processing ack: " + ack.getSeqNum());
-			while(_PacketQueue.element().getSeqNum() <= ack.getSeqNum())
+			while(!_PacketQueue.isEmpty() && _PacketQueue.element().getSeqNum() < ack.getSeqNum())
 			{
 				try{
-					
 					_PacketQueue.remove();
 				}catch(Exception ex)
 				{
 					_Logger.log(Level.SEVERE, "failed to acknowledge ack", ex);
 				}
 			}
+			startTimer();
 		}
 		
 	}
 	
+	/**
+	 * Handles the TCP handshake by opening the connection, sending the filename, and recording the server response
+	 * 
+	 * @param serverName serverName to connect to
+	 * @param serverPort port to connect to
+	 * @param fileName name of the file to transmit
+	 * @return true if the handshake was successful, false otherwise
+	 */
 	public boolean TcpHandshake(String serverName, int serverPort, String fileName)
 	{
 		boolean success = false;

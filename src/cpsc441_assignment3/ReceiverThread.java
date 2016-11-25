@@ -5,6 +5,12 @@ import java.net.DatagramSocket;
 
 import cpsc441.a3.Segment;
 
+/**
+ * ReceiverThread runs in a loop waiting for acknowledgements from the UDP connection until shutdown is called or the
+ * thread is interrupted. 
+ * @author Tyrone
+ *
+ */
 public class ReceiverThread extends Thread {
 	private DatagramSocket _UDPSocket;
 	private FastFtp _FtpParent;
